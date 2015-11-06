@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<blueprints>
+
+	<map name="mapAspectRatio">
+		<entry key="1:1" value="1by1"/>
+		<entry key="2:3" value="2by3"/>
+		<entry key="5:2" value="5by2"/>
+		<entry key="16:9" value="16by9"/>
+		<entry key="4:3" value="4by3"/>
+		<entry key="4:1" value="4by1"/>
+		<entry key="11:17" value="11by17"/>
+		<entry key="*" value=""/>
+	</map>
+
+	<map name="mapPackaging">
+		<entry key="HttpAdaptiveStreaming" value="HLS"/>
+		<entry key="SmoothStreaming" value="SS"/>
+		<entry key="SmoothStreaming_DASH" value="Dash"/>
+		<entry key="SmoothStreaming_HLS" value="HLS"/>
+		<entry key="SmoothStreaming_Dash" value="Dash"/>
+	</map>
+
+	<map name="mapEncType">
+		<!-- TODO map the other ones other than PR. Values (drmType enum): PR/WV/VMX/None -->
+		<entry key="QPDRM1" value="None"/>
+		<entry key="QCDRM1" value="None"/>
+		<entry key="IETF_HTTPAS_AC128" value="None"/>
+		<entry key="IETF_HTTPAS_AC128_IV" value="None"/>
+		<entry key="AUTHENTEC_PLAYREADY" value="PR"/>
+		<entry key="AUTHENTEC_PLAYREADY2" value="PR"/>
+		<entry key="VERIMATRIX" value="None"/>
+	</map>
+
+	<map name="encodingTypeToCCAssetFormat">
+		<entry key="M3U8VTT" value="VTT"/>
+		<entry key="DFXP" value="DFXP"/>
+	</map>
+
+	<group name="movieEpisodeGroup">
+
+		<var name="titleExternalId" jsonpath="$.content.providerOfferId"/>
+		<field name="externalId" primaryKey="true" jsonpath="$.content.providerOfferId" />
+		<field name="publicationStatus" value="Published" />
+		<var name="duration" jsonpath="$.content.assets[?(@.contentType == 'Video' &amp;&amp; @.assetType == 'Content' &amp;&amp; @.master == true)].media.parts[0].mediaProperties.duration" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.removeNonNumericChars" />
+
+		<!-- <field name="customFields" type="kvp"> -->
+		<!-- <field name="Key" value="HLS_PR_MASTER" /> -->
+		<!-- <field name="Value" jsonpath="$.content.assets[?(@.assetType=='Content')].children[*].encodingType" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.getMasterPlaylist" /> -->
+		<!-- </field> -->
+
+		<!-- Published Videos -->
+		<foreach name="assetObj" jsonpath="$.content.assets[?(@.contentType == 'Video' &amp;&amp; @.assetType == 'Content')].children[?(@.contentType == 'Video' &amp;&amp; @.assetType == 'Content')]">
+			<var name="providerAssetId" jsonpath="$.providerAssetId" />
+			<var name="assetType" jsonpath="$.assetType" />
+			<var name="language" jsonpath="$.assetData.languages" />
+			<var name="encoding" jsonpath="$.encodingType" />
+			<var name="packaging" map="mapPackaging" jsonpath="$.deliveryInfo.deliveryMethod" />
+			<var name="drmId" jsonpath="$.drmInfo.id" />
+			<var name="key" jsonpath="$.drmInfo.drmKey" />
+			<var name="drmEncType" map="mapEncType" jsonpath="$.drmInfo.id" />
+			<foreach name="assetObj" jsonpath="$[?(@.deliveryInfo.deliveryMethod)].media.parts[*]">
+				<var name="fileSize" jsonpath="$.mediaProperties.fileSize" />
+				<var name="bitrate" jsonpath="$.mediaProperties.bitrate" />
+				<var name="fileName" jsonpath="$.mediaProperties.filename" />
+				<var name="fileChecksum" jsonpath="$.checksum" />
+				<field name="publishedVideo" type="blueprint">
+					<blueprint name="ROGVideoAsset" version="1" description="Ingested by MP" loadExistingURN="true">
+						<field name="externalId" primaryKey="true" value="${providerAssetId}"/>
+						<field name="externalSystemId" value="${providerAssetId}"/>
+						<field name="internalName" value="${providerAssetId}"/>
+						<field name="type" value="${assetType}"/>
+						<field name="consumptionURI" jsonpath="$.consumptionUrl"/>
+						<field name="language" value="${language}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.toISO3LanguageCode" />
+						<field name="encoding" type="blueprint">
+							<blueprint name="ROGEncodingProfile" version="1" description="Ingested by MP" update="false" create="true">
+								<field name="name" primaryKey="true" value="${encoding}"/>
+								<field name="description" value="Encoding Profile for encoding ${encoding}"/>
+							</blueprint>
+						</field>
+						<field name="packaging" value="${packaging}"/>
+						<field name="drm" type="blueprint">
+							<blueprint name="ROGDRMProfile" version="1" description="Ingested by MP" update="false" create="true">
+								<field name="drmId" primaryKey="true" value="${drmId}"/>
+							</blueprint>
+						</field>
+						<field name="key" value="${key}"/>
+
+						<field name="mediaProperties" type="kvp">
+							<field name="Bitrate" value="${bitrate}" converter="stringToFloat" />
+							<field name="Duration" value="${duration}" converter="stringToFloat" />
+						</field>
+
+						<field name="fileName" value="${fileName}"/>
+						<field name="fileSize" value="${fileSize}"/>
+						<field name="fileChecksum" value="${fileChecksum}"/>
+					</blueprint>
+				</field>
+			</foreach>
+		</foreach>
+
+		<!-- Trailers - Preview Videos -->
+		<foreach name="partObj" jsonpath="$.content.assets[?(@.contentType == 'Video' &amp;&amp; @.assetType == 'Preview')]">
+			<var name="providerAssetId" jsonpath="$.providerAssetId" />
+			<var name="contentFileSize" jsonpath="$.assetData.Content_FileSize" />
+			<var name="contentCheckSum" jsonpath="$.assetData.Content_CheckSum" />
+			<var name="type" jsonpath="$.assetData.Type" />
+			<var name="trailerDuration" jsonpath="$.media.parts[0].mediaProperties.duration" />
+
+			<field name="trailers" type="blueprint">
+				<blueprint name="ROGTrailer" version="1" description="Ingested by MP" loadExistingURN="true">
+					<field name="externalId" primaryKey="true" value="${providerAssetId}"/>
+					<field name="publicationStatus" value="Published" />
+					<field name="ovContentTypeId" value="3" converter="stringToNumber" />
+					<field name="ovContentId" value="ROGTrailer,${titleExternalId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.calculateOvContentId" />
+					<!-- <field name="customFields" type="kvp"> -->
+					<!-- <field name="Key" value="HLS_PR_MASTER" /> -->
+					<!-- <field name="Value" jsonpath="$.children[*].encodingType" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.getMasterPlaylist" /> -->
+					<!-- </field> -->
+
+					<!-- Source Video -->
+					<foreach name="partObj" jsonpath="$.media.parts[*]">
+						<var name="fileName" jsonpath="$.mediaProperties.filename" />
+						<field name="sourceVideo" type="blueprint">
+							<blueprint name="ROGVideoAsset" version="1" description="Ingested by MP" loadExistingURN="true">
+								<field name="externalId" primaryKey="true" value="${providerAssetId}" />
+								<field name="externalSystemId" value="${fileName}"/>
+								<field name="internalName" value="${fileName}"/>
+								<field name="type" value="${type}"/>
+								<field name="fileName" value="${fileName}" />
+								<field name="fileSize" value="${contentFileSize}" converter="removeScientificFromNumber"/>
+								<field name="fileChecksum" value="${contentCheckSum}" />
+							</blueprint>
+						</field>
+					</foreach>
+
+					<!-- Published Video -->
+					<foreach name="assetObj" jsonpath="$.children[?(@.contentType == 'Video')]">
+						<var name="providerAssetId" jsonpath="$.providerAssetId" />
+						<var name="assetType" jsonpath="$.assetType" />
+						<var name="language" jsonpath="$.assetData.languages" />
+						<var name="encoding" jsonpath="$.encodingType" />
+						<var name="packaging" map="mapPackaging" jsonpath="$.deliveryInfo.deliveryMethod" />
+						<var name="drmId" jsonpath="$.drmInfo.id" />
+						<var name="key" jsonpath="$.drmInfo.drmKey" />
+						<var name="drmEncType" map="mapEncType" jsonpath="$.drmInfo.id" />
+						<foreach name="assetObj" jsonpath="$[?(@.deliveryInfo.deliveryMethod)].media.parts[*]">
+							<var name="bitrate" jsonpath="$.mediaProperties.bitrate" />
+							<var name="fileName" jsonpath="$.mediaProperties.filename" />
+							<var name="fileSize" jsonpath="$.mediaProperties.fileSize" />
+							<var name="fileChecksum" jsonpath="$.mediaProperties.sourceFileChecksum" />
+							<field name="publishedVideo" type="blueprint">
+								<blueprint name="ROGVideoAsset" version="1" description="Ingested by MP" loadExistingURN="true">
+									<field name="externalId" primaryKey="true" value="${providerAssetId}"/>
+									<field name="externalSystemId" value="${providerAssetId}"/>
+									<field name="internalName" value="${providerAssetId}"/>
+									<field name="type" value="${assetType}"/>
+									<field name="consumptionURI" jsonpath="$.consumptionUrl"/>
+									<field name="language" value="${language}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.toISO3LanguageCode" />
+									<field name="encoding" type="blueprint">
+										<blueprint name="ROGEncodingProfile" version="1" description="Ingested by MP" update="false" create="true">
+											<field name="name" primaryKey="true" value="${encoding}"/>
+										</blueprint>
+									</field>
+									<field name="packaging" value="${packaging}"/>
+									<field name="drm" type="blueprint">
+										<blueprint name="ROGDRMProfile" version="1" description="Ingested by MP" update="false" create="true">
+											<field name="drmId" primaryKey="true" value="${drmId}"/>
+										</blueprint>
+									</field>
+									<field name="key" value="${key}"/>
+
+									<field name="mediaProperties" type="kvp">
+										<field name="Bitrate" value="${bitrate}" converter="stringToFloat" />
+										<field name="Duration" value="${trailerDuration}" converter="stringToFloat" />
+									</field>
+
+									<field name="fileName" value="${fileName}"/>
+									<field name="fileSize" value="${fileSize}"/>
+									<field name="fileChecksum" value="${fileChecksum}"/>
+								</blueprint>
+							</field>
+						</foreach>
+					</foreach>
+					<!-- Published Audios -->
+					<foreach name="assetObj" jsonpath="$.children[?(@.contentType == 'Audio')]">
+						<var name="providerAssetId" jsonpath="$.providerAssetId" />
+						<var name="assetType" jsonpath="$.assetType" />
+						<var name="language" jsonpath="$.assetData.languages" />
+						<var name="encoding" jsonpath="$.encodingType" />
+						<var name="packaging" map="mapPackaging" jsonpath="$.deliveryInfo.deliveryMethod" />
+						<var name="drmId" jsonpath="$.drmInfo.id" />
+						<var name="key" jsonpath="$.drmInfo.drmKey" />
+						<var name="drmEncType" map="mapEncType" jsonpath="$.drmInfo.id" />
+						<foreach name="assetObj" jsonpath="$[?(@.deliveryInfo.deliveryMethod)].media.parts[*]">
+							<var name="bitrate" jsonpath="$.mediaProperties.bitrate" />
+							<var name="fileName" jsonpath="$.mediaProperties.filename" />
+							<var name="fileSize" jsonpath="$.mediaProperties.fileSize" />
+							<var name="fileChecksum" jsonpath="$.mediaProperties.sourceFileChecksum" />
+							<field name="publishedAudio" type="blueprint">
+								<blueprint name="ROGAudioAsset" version="1" description="Ingested by MP" loadExistingURN="true">
+									<field name="externalId" primaryKey="true" value="${providerAssetId}"/>
+									<field name="externalSystemId" value="${providerAssetId}"/>
+									<field name="internalName" value="${providerAssetId}"/>
+									<field name="type" value="${assetType}"/>
+									<field name="consumptionURI" jsonpath="$.consumptionUrl"/>
+									<field name="language" value="${language}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.toISO3LanguageCode" />
+									<field name="encoding" type="blueprint">
+										<blueprint name="ROGEncodingProfile" version="1" description="Ingested by MP" update="false" create="false">
+											<field name="name" primaryKey="true" value="${encoding}"/>
+										</blueprint>
+									</field>
+									<field name="packaging" value="${packaging}"/>
+									<field name="drm" type="blueprint">
+										<blueprint name="ROGDRMProfile" version="1" description="Ingested by MP" update="false" create="false">
+											<field name="drmId" primaryKey="true" value="${drmId}"/>
+										</blueprint>
+									</field>
+
+									<field name="mediaProperties" type="kvp">
+										<field name="Bitrate" value="${bitrate}" converter="stringToFloat" />
+										<field name="Duration" value="${trailerDuration}" converter="stringToFloat" />
+									</field>
+
+									<field name="fileName" value="${fileName}"/>
+									<field name="fileSize" value="${fileSize}"/>
+									<field name="fileChecksum" value="${fileChecksum}"/>
+								</blueprint>
+							</field>
+						</foreach>
+					</foreach>
+				</blueprint>
+			</field>
+		</foreach>
+
+		<!-- Published Audios -->
+		<foreach name="assetObj" jsonpath="$.content.assets[?(@.contentType == 'Video')].children[?(@.contentType == 'Audio')]">
+			<var name="providerAssetId" jsonpath="$.providerAssetId" />
+			<var name="assetType" jsonpath="$.assetType" />
+			<var name="language" jsonpath="$.assetData.languages" />
+			<var name="encoding" jsonpath="$.encodingType" />
+			<var name="packaging" map="mapPackaging" jsonpath="$.deliveryInfo.deliveryMethod" />
+			<var name="drmId" jsonpath="$.drmInfo.id" />
+			<var name="key" jsonpath="$.drmInfo.drmKey" />
+			<var name="drmEncType" map="mapEncType" jsonpath="$.drmInfo.id" />
+			<foreach name="assetObj" jsonpath="$[?(@.deliveryInfo.deliveryMethod)].media.parts[*]">
+				<var name="bitrate" jsonpath="$.mediaProperties.bitrate" />
+				<var name="fileName" jsonpath="$.mediaProperties.filename" />
+				<var name="fileSize" jsonpath="$.mediaProperties.fileSize" />
+				<var name="fileChecksum" jsonpath="$.mediaProperties.sourceFileChecksum" />
+				<field name="publishedAudio" type="blueprint">
+					<blueprint name="ROGAudioAsset" version="1" description="Ingested by MP" loadExistingURN="true">
+						<field name="externalId" primaryKey="true" value="${providerAssetId}"/>
+						<field name="externalSystemId" value="${providerAssetId}"/>
+						<field name="internalName" value="${providerAssetId}"/>
+						<field name="type" value="${assetType}"/>
+						<field name="consumptionURI" jsonpath="$.consumptionUrl"/>
+						<field name="language" value="${language}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.toISO3LanguageCode" />
+						<field name="encoding" type="blueprint">
+							<blueprint name="ROGEncodingProfile" version="1" description="Ingested by MP" update="false" create="true">
+								<field name="name" primaryKey="true" value="${encoding}"/>
+							</blueprint>
+						</field>
+						<field name="packaging" value="${packaging}"/>
+						<field name="drm" type="blueprint">
+							<blueprint name="ROGDRMProfile" version="1" description="Ingested by MP" update="false" create="true">
+								<field name="drmId" primaryKey="true" value="${drmId}"/>
+							</blueprint>
+						</field>
+
+						<field name="mediaProperties" type="kvp">
+							<field name="Bitrate" value="${bitrate}" converter="stringToFloat" />
+							<field name="Duration" value="${duration}" converter="stringToFloat" />
+						</field>
+
+						<field name="fileName" value="${fileName}"/>
+						<field name="fileSize" value="${fileSize}"/>
+						<field name="fileChecksum" value="${fileChecksum}"/>
+					</blueprint>
+				</field>
+			</foreach>
+		</foreach>
+
+		<!-- Published Subtitles -->
+		<foreach name="assetObj" jsonpath="$.content.assets[?(@.contentType == 'Video')].children[?(@.contentType == 'Subtitle')]">
+			<var name="assetType" jsonpath="$.assetType" />
+			<var name="label" jsonpath="$.assetData.language" />
+			<var name="language" jsonpath="$.assetData.lang" />
+			<var name="offset" jsonpath="$.assetData.Offset" />
+			<var name="fileName" jsonpath="$.assetData.fileName" />
+			<var name="fileChecksum" jsonpath="$.assetData.sourceFileChecksum" />
+			<foreach name="assetObj" jsonpath="$.children[?(@.encodingType == 'DFXP' || @.encodingType == 'M3U8VTT')]">
+				<var name="providerAssetId" jsonpath="$.providerAssetId" />
+				<var name="ccAssetFormat" jsonpath="$.encodingType" map="encodingTypeToCCAssetFormat" />
+				<foreach name="assetObj" jsonpath="$.media.parts">
+					<field name="publishedSubtitle" type="blueprint">
+						<blueprint name="ROGCCAsset" version="1" description="Ingested by MP" loadExistingURN="true">
+							<field name="externalId" primaryKey="true" value="${providerAssetId}"/>
+							<field name="externalSystemId" value="${providerAssetId}"/>
+							<field name="internalName" value="${providerAssetId}"/>
+							<field name="format" value="${ccAssetFormat}" /><!-- VTT/TTML -->
+							<field name="type" value="${assetType}"/>
+							<field name="consumptionURI" jsonpath="$.consumptionUrl"/>
+							<field name="label" value="${label}"/>
+							<field name="language" value="${language}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.toISO3LanguageCode" />
+							<field name="offset" value="${offset}" converter="timeToSeconds" />
+							<!--
+                            <field name="forced" value="boolean"/>
+                            <field name="autoSelect" value="boolean"/>
+                            <field name="default" value="boolean"/>
+                            <field name="fileURI" value="url"/>
+                            -->
+							<field name="fileName" value="${fileName}"/>
+							<field name="fileSize" jsonpath="$.contentSize" converter="removeScientificFromNumber"/>
+							<field name="fileChecksum" value="${fileChecksum}"/>
+						</blueprint>
+					</field>
+				</foreach>
+			</foreach>
+		</foreach>
+	</group>
+
+	<blueprint name="ROGMovie" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Movie" loadExistingURN="true">
+		<include group="movieEpisodeGroup" />
+	</blueprint>
+
+	<blueprint name="ROGTVEpisode" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Episode" loadExistingURN="true">
+		<include group="movieEpisodeGroup" />
+	</blueprint>
+
+	<blueprint name="ROGSpecial" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Special" loadExistingURN="true">
+		<include group="movieEpisodeGroup" />
+	</blueprint>
+
+	<blueprint name="ROGSport" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Sport" loadExistingURN="true">
+		<include group="movieEpisodeGroup" />
+	</blueprint>
+
+	<blueprint name="ROGEvent" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Event" loadExistingURN="true">
+		<include group="movieEpisodeGroup" />
+	</blueprint>
+</blueprints>

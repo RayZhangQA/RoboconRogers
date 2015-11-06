@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<blueprints>
+
+	<map name="mapDefaultRating">
+		<entry key="^$" type="regex" value="NR"/>
+	</map>
+
+	<map name="mapAspectRatio">
+		<entry key="1:1" value="1by1"/>
+		<entry key="2:3" value="2by3"/>
+		<entry key="5:2" value="5by2"/>
+		<entry key="16:9" value="16by9"/>
+		<entry key="4:3" value="4by3"/>
+		<entry key="4:1" value="4by1"/>
+		<entry key="11:17" value="11by17"/>
+		<entry key="*" value=""/>
+	</map>
+
+	<map name="mapVODDestination">
+		<!-- VOD Destination status -->
+		<entry key="drafted" value="Pending"/>
+		<entry key="Discovered" value="Processing"/>
+		<entry key="Started" value="Complete"/>
+		<entry key="Completed" value="Complete"/>
+		<entry key="Failed" value="Failed"/>
+		<entry key="Queued" value="Enqueued"/>
+	</map>
+
+	<map name="mapMarkerType">
+		<entry key="INLINE" value="Inline"/>
+		<entry key="DAI_INSERT" value="DynamicInsert"/>
+		<entry key="DAI_REPLACE" value="DynamicReplace"/>
+	</map>
+
+	<map name="mapTargetType">
+		<entry key="DAI" value="Dynamic"/>
+		<entry key="INLINE" value="Inline"/>
+		<entry key="MIXED" value="Mixed"/>
+	</map>
+
+	<map name="mapContentFormat">
+		<entry key="1080p" value="HD"/>
+		<entry key="1080i" value="HD"/>
+		<entry key="720p" value="HD"/>
+		<entry key="4K" value="4K"/>
+		<entry key="*" value=""/>
+	</map>
+
+	<map name="mapTrue">
+		<entry key="true" value="true"/>
+		<entry key="*" value=""/>
+	</map>
+	<map name="publicationStatusMap">
+		<entry key="true" value="Draft"/>
+		<entry key="*" value=""/>
+	</map>
+	<group name="movieEpisodeGroup">
+
+		<var name="titleExternalId" jsonpath="$.content.providerOfferId"/>
+		<field name="externalId" primaryKey="true" jsonpath="$.content.providerOfferId"/>
+		<!--  Not used as per Mapping Doc <field name="externalTitleId" jsonpath="$.content.extendedParams['titleId']"/> -->
+		<field name="externalSystemId" jsonpath="$.content.extendedParams.package_asset_Provider_ID.AMS.[0]" />
+		<field name="ovContentTypeId" value="3" converter="stringToNumber" />
+
+		<var name="publicationStatusMapValue" map="publicationStatusMap" jsonpath="$.isInitialIngested"/>
+		<field name="publicationStatus" value="${publicationStatusMapValue}" />
+
+		<field name="brandingChannel" type="blueprint">
+			<blueprint name="ROGContainer" version="1" description="Ingested by MP" create="false" update="false">
+				<field name="internalName" primaryKey="true" jsonpath="$.content.providerName" />
+			</blueprint>
+		</field>
+
+		<field name="contentProvider" type="blueprint">
+			<blueprint name="ROGCompany" version="1" description="Ingested by MP" update="false" create="false">
+				<field name="name" primaryKey="true" jsonpath="$.content.providerName" />
+				<var name="providerId" jsonpath="$.content.providerId" />
+				<field name="description" value="Provider Id: ${providerId}" />
+				<field name="type" primaryKey="true" value="ContentProvider" />
+			</blueprint>
+		</field>
+
+		<var name="windowStartDate" jsonpath="$.content.extendedParams['Licensing_Window_Start'].MOD[0]" />
+		<field name="startDate" value="${windowStartDate},America/Toronto" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.advancedDateConverter" />
+
+		<var name="windowEndDate" jsonpath="$.content.extendedParams['Licensing_Window_End'].MOD[0]" />
+		<field name="endDate" value="${windowEndDate},America/Toronto" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.advancedDateConverter" />
+
+		<!--
+		<foreach name="categ" jsonpath="$.content.categories">
+			<field name="categoryText" value="${categ}" />
+		</foreach>
+
+		<foreach name="categ" jsonpath="$.content.extendedParams.Guide_Category.MOD">
+			<field name="guideCategoryText" value="${categ}" />
+		</foreach>
+		<foreach name="categ" jsonpath="$.content.extendedParams.Service_Category.MOD">
+			<field name="serviceCategory" value="${categ}" />
+		</foreach>
+		-->
+
+		<field name="contract" jsonpath="$.content.extendedParams.Contract_Name.MOD[0]"/>
+		<field name="displayAsLastChance" jsonpath="$.content.extendedParams.Display_as_Last_Chance" converter="toBoolean" />
+		<field name="displayAsNew" jsonpath="$.content.extendedParams.Display_As_New" converter="toBoolean" />
+
+		<foreachkey name="locale" jsonpath="$.content.localizedDataMap">
+			<var name="language" splitter="splitByUnderscore" index="0" />
+			<field name="titleBrief" 		jsonpath="$.content.localizedDataMap['${locale}'].titleShort" />
+			<field name="title" 	jsonpath="$.content.localizedDataMap['${locale}'].titleLong" />
+			<field name="summaryShort" 	jsonpath="$.content.localizedDataMap['${locale}'].descriptionShort" />
+		</foreachkey>
+
+		<field name="programType" jsonpath="$.content.extendedParams.Program_Type.MOD[0]" />
+		<!--
+		<field name="frontPorch" jsonpath="$.content.extendedParams.frontPorch.MOD[0]" converter="toBoolean" />
+
+		<var name="frontPorchTrue" jsonpath="$.content.extendedParams.frontPorch.MOD[0]" map="mapTrue" />
+		<foreach name="frontPorchPresent" value="${frontPorchTrue}">
+			<field name="entitlements" type="kvp">
+				<field name="Subscription" type="blueprint">
+					<blueprint name="ROGSubscriptionPackage" version="1" description="Ingested by MP" update="true" create="true">
+						<field name="externalId" primaryKey="true" value="FREE" />
+					</blueprint>
+				</field>
+
+				<field name="FlightStartDate" value="${windowStartDate},America/Los_Angeles" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.advancedDateConverter"/>
+				<field name="FlightEndDate" value="${windowEndDate},America/Los_Angeles" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.advancedDateConverter" />
+			</field>
+		</foreach>
+        -->
+
+		<foreach name="ratings" jsonpath="$.content.ratings">
+			<field name="dtvRatings" jsonpath="$.rating" />
+		</foreach>
+		<field name="dtvAdvisories" jsonpath="$.content.advisories" />
+		<field name="year" jsonpath="$.content.extendedParams.Year.MOD[0]" converter="stringToNumber" />
+		<field name="billingId" jsonpath="$.content.extendedParams.Billing_ID.MOD[0]" />
+		<field name="boxOffice" jsonpath="$.content.extendedParams.Box_Office.MOD[0]" />
+		<field name="runTime" jsonpath="$.content.extendedParams.Run_Time.MOD[0]" />
+		<field name="displayRuntime" jsonpath="$.content.extendedParams.Display_Run_Time.MOD[0]" />
+		<field name="previewPeriod" jsonpath="$.content.extendedParams.Preview_Period.MOD[0]" converter="stringToNumber" />
+
+
+		<!-- TODO uncomment later. Data too big and jeopardizing debug
+		<field name="feed" jsonpath="$.content.feedFileInfo.feedFileContent" />
+		-->
+
+		<foreach name="oneGenre" jsonpath="$.content.genres">
+			<field name="dtvGenres" type="blueprint">
+				<blueprint name="ROGGenre" version="1" description="Ingested by MP" update="false" loadExistingURN="true">
+					<field name="name" primaryKey="true" value="${oneGenre}" selector="ROGlanguage" selectorValue="eng"/>
+				</blueprint>
+			</field>
+		</foreach>
+
+		<!-- castAndCrew -->
+		<foreach name="onePerson" jsonpath="$.content.localizedDataMap[*].actors[*]">
+			<field name="dtvActors" value="${onePerson}" />
+		</foreach>
+
+		<!--
+		<field name="cpTMSContentId" jsonpath="$.content.extendedParams['TMS_ID'].MOD[0]" />
+		<field name="adContentId" jsonpath="$.content.extendedParams['Ad_Content_ID'].MOD[0]" />
+		<field name="adContentId" jsonpath="$.content.extendedParams['Ad_Content_ID'].SVOD[0]" />
+        -->
+
+		<!-- Dynamic adTarget -->
+		<foreach name="ad" jsonpath="$.content.assets[?(@.master == true)].adTarget[?(@.extendedParams.adTargetType)]">
+			<var name="adTargetingType" map="mapTargetType" jsonpath="$.extendedParams.adTargetType"/>
+			<var name="adTargetJson" jsonpath="$" />
+			<field name="adTargetingType" value="${adTargetingType}" />
+			<field name="adEnabled" value="true" converter="toBoolean" />
+			<field name="submissionState" value="NotProcessed" />
+			<!-- PreRoll -->
+			<!--
+			<foreach name="preRoll" jsonpath="$.preAdTarget[?(@.enabled == true)]">
+				<field name="adMarkers" type="kvp">
+					<var name="markerType" map="mapMarkerType" jsonpath="$.extendedParams.markerType"/>
+					<field name="Type" value="${markerType}" />
+					<field name="Position" value="PreRoll" />
+				</field>
+			</foreach>
+			-->
+			<!-- MidRoll -->
+			<foreach name="midRoll" jsonpath="$.midAdTarget[?(@.enabled == true)].cuePoints[*]">
+				<field name="adMarkers" type="kvp">
+					<var name="markerType" map="mapMarkerType" jsonpath="$.extendedParams.markerType"/>
+					<field name="Type" value="${markerType}" />
+					<field name="StartPos" jsonpath="$.startTs" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.stringToBigDecimal" />
+					<field name="EndPos" jsonpath="$.endTs" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.stringToBigDecimal" />
+					<var name="startPosition" jsonpath="$.startTs" />
+					<field name="Position" value="${startPosition},${adTargetJson}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.calculateAdPosition" />
+				</field>
+			</foreach>
+			<!-- PostRoll -->
+			<!--
+			<foreach name="postRoll" jsonpath="$.postAdTarget[?(@.enabled == true)]">
+				<field name="adMarkers" type="kvp">
+					<var name="markerType" map="mapMarkerType" jsonpath="$.extendedParams.markerType"/>
+					<field name="Type" value="${markerType}" />
+					<field name="Position" value="PostRoll" />
+				</field>
+			</foreach>
+			-->
+		</foreach>
+		<foreach name="ad" jsonpath="$.content.assets[?(@.master == true)].adTarget[?(!@.extendedParams.adTargetType)]">
+			<field name="adEnabled" value="false" converter="toBoolean" />
+		</foreach>
+
+		<!-- Assets -->
+		<!-- Main Videos -->
+		<foreach name="assetObj" jsonpath="$.content.assets[?(@.contentType == 'Video' &amp;&amp; @.assetType == 'Content' &amp;&amp; @.master == true)]">
+			<var name="contentFormatVar" jsonpath="$.assetData.Resolution" map="mapContentFormat" />
+			<field name="contentFormat" value="${contentFormatVar}"/> <!-- Values: HD/SD/4K -->
+			<field name="adiLanguage" jsonpath="$.assetData.Languages"/> <!-- Multi: singleLineText -->
+			<field name="adiSubtitleLanguage" jsonpath="$.assetData.Subtitle_Languages"/>
+			<field name="adiDubbedLanguage" jsonpath="$.assetData.Dubbed_Languages"/> <!-- Multi: singleLineText -->
+		</foreach>
+
+		<!-- Source Videos -->
+		<foreach name="assetObj" jsonpath="$.content.assets[?(@.contentType == 'Video' &amp;&amp; @.assetType == 'Content')]">
+			<var name="providerAssetId" jsonpath="$.providerAssetId" />
+			<var name="contentFileSize" jsonpath="$.assetData.Content_FileSize" />
+			<var name="contentCheckSum" jsonpath="$.assetData.Content_CheckSum" />
+			<var name="type" jsonpath="$.assetData.Type" />
+			<foreach name="partObj" jsonpath="$.media.parts">
+				<var name="fileName" jsonpath="$.mediaProperties.filename" />
+				<var name="videoWidth" jsonpath="$.mediaProperties.videoWidth"/>
+				<var name="videoHeight" jsonpath="$.mediaProperties.videoHeight"/>
+				<var name="videoAspect" jsonpath="$.mediaProperties.videoAspect"/>
+				<field name="sourceVideo" type="blueprint">
+					<blueprint name="ROGVideoAsset" version="1" description="Ingested by MP" loadExistingURN="false">
+						<field name="externalId" primaryKey="true" value="${providerAssetId}" />
+						<field name="externalSystemId" value="${providerAssetId}"/>
+						<field name="internalName" value="${providerAssetId}"/>
+						<field name="type" value="${type}"/>
+						<field name="fileName" value="${fileName}" />
+						<field name="fileSize" value="${contentFileSize}" converter="removeScientificFromNumber"/>
+						<field name="fileChecksum" value="${contentCheckSum}" />
+						<field name="mediaProperties" type="kvp">
+							<field name="Bitrate" jsonpath="$.mediaProperties.bitrate"/>
+							<field name="VideoBitrate" jsonpath="$.mediaProperties.videoBitrate"/>
+							<field name="Duration" jsonpath="$.mediaProperties.duration" converter="stringToNumber"/>
+							<field name="VideoCodec" jsonpath="$.mediaProperties.videoCodec" />
+							<field name="Wrapper" jsonpath="$.mediaProperties.videoFormat" />
+							<field name="FrameRate" jsonpath="$.mediaProperties.videoFps" converter="stringToNumber"/>
+						</field>
+						<field name="customFields" type="kvp">
+							<field name="Key" value="VideoWidth" />
+							<field name="Value" value="${videoWidth}"/>
+						</field>
+						<field name="customFields" type="kvp">
+							<field name="Key" value="VideoHeight" />
+							<field name="Value" value="${videoHeight}"/>
+						</field>
+						<field name="customFields" type="kvp">
+							<field name="Key" value="VideoAspect" />
+							<field name="Value" value="${videoAspect}"/>
+						</field>
+					</blueprint>
+				</field>
+			</foreach>
+		</foreach>
+	</group>
+
+	<blueprint name="ROGMovie" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Movie" loadExistingURN="false">
+		<include group="movieEpisodeGroup" />
+		<field name="ovContentId" value="ROGMovie,${titleExternalId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.calculateOvContentId" />
+	</blueprint>
+
+	<blueprint name="ROGTVEpisode" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Episode" loadExistingURN="false">
+		<var name="episodeId" jsonpath="$.content.extendedParams['Episode_ID'].MOD[0]" />
+		<!--
+		<field name="episodes" jsonpath="$.content.extendedParams.Episode_Name.MOD[0]" />
+		<field name="episodeNumber" value="${episodeId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.convertEpisodeIdToEpisodeNumber" />
+		<field name="seasonNumber" value="${episodeId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.convertEpisodeIdToSeasonNumber" />
+		-->
+		<field name="adiSeasonId" value="${episodeId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.convertEpisodeIdToSeasonId" />
+		<field name="seriesName" jsonpath="$.content.extendedParams.Episode_Name.MOD[0]" />
+
+		<include group="movieEpisodeGroup" />
+		<field name="ovContentId" value="ROGTVEpisode,${titleExternalId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.calculateOvContentId" />
+	</blueprint>
+
+	<blueprint name="ROGSpecial" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Special" loadExistingURN="false">
+		<include group="movieEpisodeGroup" />
+		<field name="ovContentId" value="ROGSpecial,${titleExternalId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.calculateOvContentId" />
+	</blueprint>
+
+	<blueprint name="ROGSport" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Sport" loadExistingURN="false">
+		<include group="movieEpisodeGroup" />
+		<field name="ovContentId" value="ROGSport,${titleExternalId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.calculateOvContentId" />
+	</blueprint>
+
+	<blueprint name="ROGEvent" version="1" description="Ingested by MP" jsonpathmatch="$.content.offerType" jsonmatchvalue="Event" loadExistingURN="false">
+		<include group="movieEpisodeGroup" />
+		<field name="ovContentId" value="ROGEvent,${titleExternalId}" converter="com.quickplay.mp.module.rogersraptv.cmspublisher.ROGCMSPublisherUtil.calculateOvContentId" />
+	</blueprint>
+</blueprints>

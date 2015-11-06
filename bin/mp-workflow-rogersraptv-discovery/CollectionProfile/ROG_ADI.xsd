@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	ROG / Quickplay ADI Metadata Schema
+	created by MP_QA@quickplay.com
+	version 0.1 - Jul, 2017 - Original release
+        version 0.2 - Aug 01, 2017 - remove the validation of "Actor" and "Actors_Display".
+-->
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:vc="http://www.w3.org/2007/XMLSchema-versioning"
+           xmlns:xerces="http://xerces.apache.org"
+           vc:minVersion="1.1">
+    <xs:complexType name="AMSType">
+        <xs:attribute type="xs:string" name="Asset_Name" use="required"/>
+        <xs:attribute name="Provider" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                 <xs:maxLength value="32"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute type="xs:string" name="Product" use="required"/>
+        <xs:attribute name="Version_Major" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="1"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute type="xs:string" name="Version_Minor" use="required"/>
+        <xs:attribute type="xs:string" name="Description" use="required"/>
+        <xs:attribute type="xs:date" name="Creation_Date" use="required"/>
+        <xs:attribute name="Provider_ID" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:maxLength value="20"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="Asset_ID" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:length value="20"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="Asset_Class" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="package"/>
+                    <xs:enumeration value="title"/>
+                    <xs:enumeration value="movie"/>
+                    <xs:enumeration value="poster"/>
+                    <xs:enumeration value="preview"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="Verb" use="optional">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="UPDATE"/>
+                    <xs:enumeration value="DELETE"/>
+                    <xs:enumeration value=""/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:assert test="matches(@Provider_ID, '^[^ A-Z]+$')"/>
+        <xs:assert test="matches(@Asset_ID, '^[A-Z][A-Z][A-Z][A-Z][0-9]+$')"/>
+    </xs:complexType>
+    <xs:complexType name="App_DataType">
+        <xs:attribute type="xs:string" name="App" use="required"/>
+        <xs:attribute type="xs:string" name="Name" use="required"/>
+        <xs:attribute type="xs:string" name="Value" use="required"/>
+    </xs:complexType>
+    <xs:element name="ADI">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Metadata">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="AMS" type="AMSType"/>
+                            <xs:element name="App_Data" type="App_DataType" maxOccurs="unbounded" minOccurs="0"/>
+                        </xs:sequence>
+
+                    </xs:complexType>
+                </xs:element>
+                <xs:element name="Asset">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="Metadata">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="AMS" type="AMSType"/>
+                                        <xs:element name="App_Data" type="App_DataType" maxOccurs="unbounded" minOccurs="0">
+                                        </xs:element>
+                                    </xs:sequence>
+                                    <xs:assert test="./App_Data[@Name='Show_Type' and lower-case(@Value)=('movie','series','sport','event','show','special')]"
+                                               xerces:message="Show_Type is required and of allowed value."/>
+                                    <xs:assert test="./App_Data[@Name='Type']"
+                                               xerces:message="Type is required."/>
+
+                                    <xs:assert test="./App_Data[@Name='Title' and string-length(@Value) le 50 and string-length(@Value) ge 1]"
+                                               xerces:message="Title is required and maximum 50 characters are allowed."/>
+                                    <!-- For EPISODE only -->
+                                    <xs:assert test="if (./App_Data[@Name='Show_Type' and lower-case(@Value)=('series')]) then
+                                        ./App_Data[@Name='Episode_Name']
+                                        else true()"
+                                               xerces:message="For Episodes, Episode_Name is required."/>
+                                    <xs:assert test="if (./App_Data[@Name='Show_Type' and lower-case(@Value)=('series')]) then
+                                        ./App_Data[@Name='Episode_ID']
+                                        else true()"
+                                               xerces:message="For Episodes, Episode_ID is required."/>
+
+                                    <xs:assert test="./App_Data[@Name='Closed_Captioning' and lower-case(@Value)=('y','n')]"
+                                               xerces:message="Closed_Captioning is required and of allowed value."/>
+                                    <xs:assert test="./App_Data[@Name = 'Year' and matches(@Value, '\d{4}?')]"
+                                               xerces:message="Year is required and of allowed value."/>
+                                    <xs:assert test="./App_Data[@Name = 'Country_of_Origin' and string-length(@Value) eq 2]"
+                                               xerces:message="Country_of_Origin is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Studio']"
+                                               xerces:message="Studio is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Category']"
+                                               xerces:message="Category is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Genre']"
+                                               xerces:message="Genre is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Preview_Period']"
+                                               xerces:message="Preview_Period is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Maximum_Viewing_Length' and matches(@Value,'^(00|0[0-9]|1[0-9]|2[0-3]):([0-9]|[0-5][0-9]):([0-9]|[0-5][0-9])$')]"
+                                               xerces:message="Run_Time is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Display_Run_Time' and matches(@Value,'^(00|0[0-9]|1[0-9]|2[0-3]):([0-9]|[0-5][0-9])$')]"
+                                               xerces:message="Display_Run_Time is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Run_Time' and matches(@Value,'^(00|0[0-9]|1[0-9]|2[0-3]):([0-9]|[0-5][0-9]):([0-9]|[0-5][0-9])$')]"
+                                               xerces:message="Run_Time is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Billing_ID']"
+                                               xerces:message="Billing_ID is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Title_Brief' and string-length(@Value) le 19 and string-length(@Value) ge 1]"
+                                               xerces:message="Title_Brief is required."/>
+                                    <!-- TODO Change the assertion which complies with the code change in the cmsPublisher-->
+                                    <xs:assert test="./App_Data[@Name = 'Licensing_Window_Start' and matches(@Value, '\d{4}-\d{2}-\d{2}T?(\d{2})?:?(\d{2})?:?(\d{2})?')]"
+                                               xerces:message="Licensing_Window_Start is required"/>
+                                    <xs:assert test="./App_Data[@Name = 'Licensing_Window_End' and matches(@Value, '\d{4}-\d{2}-\d{2}T?(\d{2})?:?(\d{2})?:?(\d{2})?')]"
+                                               xerces:message="Licensing_Window_End is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Summary_Short']"
+                                               xerces:message="Summary_Short is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Summary_Medium']"
+                                               xerces:message="Summary_Medium is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Rating']"
+                                               xerces:message="Rating is required."/>
+                                    <xs:assert test="./App_Data[@Name = 'Suggested_Price']"
+                                               xerces:message="Suggested_Price is required"/>
+                                    <xs:assert test="./App_Data[@Name = 'Program_Type' and @Value=('010','11A','11B','02A','02B','030','040','05A','05B','06A','06B','07A','07B','07C','07D','07E','07F','07G','08A','08B','08C','090','100','120','130','150')]"
+                                               xerces:message="Program_Type is required and of allowed value."/>
+                                    <xs:assert test="if (./App_Data[@Name='Genre' and lower-case(@Value)=('adult')]) then
+                                        (./App_Data[@Name='OFRB' and string-length(@Value) le 10 and string-length(@Value) ge 1])
+                                        else true()"
+                                               xerces:message="OFRB is required."/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="Asset" maxOccurs="unbounded" minOccurs="0">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="Metadata">
+                                            <xs:complexType>
+                                                <xs:sequence>
+                                                    <xs:element name="AMS" type="AMSType"/>
+                                                    <xs:element name="App_Data" type="App_DataType" maxOccurs="unbounded" minOccurs="0">
+                                                    </xs:element>
+                                                </xs:sequence>
+                                                <xs:assert test="every $x in ./App_Data[contains(@Name,'AdBreak_')] satisfies count(tokenize($x/@Value,',\s*')) = 2 "
+                                                           xerces:message="AdBreak contains start and end timecode"/>
+                                                <xs:assert test="every $x in ./App_Data[contains(@Name,'AdBreak_')] satisfies
+                                                    (every $y in tokenize($x/@Value,',\s*') satisfies
+                                                    matches($y,'^(?:(?:[0-1][0-9]|[0-2][0-3]):)(?:[0-5][0-9]:){2}(?:[0-6][0-9])$') or matches($y,'^(?:(?:[0-1][0-9]|[0-2][0-3]):)(?:[0-5][0-9]:)(?:[0-5][0-9];)(?:[0-6][0-9])$'))"
+                                                           xerces:message="AdBreak format is SMPTE NDF/DF timecode."/>
+                                                <xs:assert test="./App_Data[@Name='Type']"
+                                                           xerces:message="Type is required."/>
+
+                                                <xs:assert test="if (./App_Data[@Name='Type' and lower-case(@Value)=('poster')]) then
+                                                    (
+                                                        ./App_Data[@Name='Content_FileSize'] and
+                                                        ./App_Data[@Name='Content_CheckSum']
+                                                    )
+                                                    else true()"
+                                                           xerces:message="Poster metadata is required."/>
+
+                                                <xs:assert test="if (./App_Data[@Name='Type' and lower-case(@Value)=('movie')]) then
+                                                    (
+                                                        ./App_Data[@Name='Audio_Type'] and
+                                                        ./App_Data[@Name='Screen_Format'] and
+                                                        ./App_Data[@Name='Resolution'] and
+                                                        ./App_Data[@Name='Frame_Rate'] and
+                                                        ./App_Data[@Name='Codec'] and
+                                                        ./App_Data[@Name='Languages'] and
+                                                        ./App_Data[@Name='Bit_Rate'] and
+                                                        ./App_Data[@Name='HDContent'] and
+                                                        ./App_Data[@Name='Content_FileSize'] and
+                                                        ./App_Data[@Name='Content_CheckSum']
+                                                    )
+                                                    else true()"
+                                                           xerces:message="Movie metadata is required."/>
+
+                                                <xs:assert test="if (./App_Data[@Name='Type' and lower-case(@Value)=('preview')]) then
+                                                    (
+                                                        ./App_Data[@Name='Rating'] and
+                                                        ./App_Data[@Name='Run_Time'] and
+                                                        ./App_Data[@Name='Audio_Type'] and
+                                                        ./App_Data[@Name='Screen_Format'] and
+                                                        ./App_Data[@Name='Resolution'] and
+                                                        ./App_Data[@Name='Frame_Rate'] and
+                                                        ./App_Data[@Name='Codec'] and
+                                                        ./App_Data[@Name='Languages'] and
+                                                        ./App_Data[@Name='Bit_Rate'] and
+                                                        ./App_Data[@Name='HDContent'] and
+                                                        ./App_Data[@Name='Content_FileSize'] and
+                                                        ./App_Data[@Name='Content_CheckSum']
+                                                    )
+                                                    else true()"
+                                                           xerces:message="Preview metadata is required"/>
+                                            </xs:complexType>
+                                        </xs:element>
+                                        <xs:element name="Content">
+                                            <xs:complexType>
+                                                <xs:attribute type="xs:string" name="Value" use="required"/>
+                                            </xs:complexType>
+                                        </xs:element>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                    <xs:unique name="uniqueAssetID">
+                        <xs:selector xpath="Asset/Metadata/AMS"/>
+                        <xs:field xpath="@Asset_ID"/>
+                    </xs:unique>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>
